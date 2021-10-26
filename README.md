@@ -17,3 +17,12 @@ contract HolaMundo {
 
 }
 ```
+
+## Variables de estado y números enteros
+Las variables de estado se guardan de forma permanente en el amacenamiento del contrato, esto significa que se amacenan en la cadena d bloques de ethereum.
+```solidity
+contract Ejemplo {
+  // Esto se guardará permanentemente en la cadena de bloques
+  uint myUnsignedInteger = 100;
+}
+```
