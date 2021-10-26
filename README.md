@@ -19,10 +19,13 @@ contract HolaMundo {
 ```
 
 ## Variables de estado y números enteros
-Las variables de estado se guardan de forma permanente en el amacenamiento del contrato, esto significa que se amacenan en la cadena d bloques de ethereum.
+Las variables de estado se guardan de forma permanente en el almacenamiento del contrato, esto significa que se amacenan en la cadena de bloques de ethereum.
 ```solidity
 contract Ejemplo {
   // Esto se guardará permanentemente en la cadena de bloques
   uint myUnsignedInteger = 100;
 }
 ```
+
+## Enteros sin signo: uint
+El tipo de dato `uint` es un entero sin signo el cual su valor debe ser siempre no-negativo, también existe un tipo `int` para enteros con signo. En solidity el uint es un alias a `uint256` refiriendose a sus bits, tambien se puede especificar con declaraciones como `uint8`, `uint16`, `uint32` etc... 
