@@ -57,7 +57,7 @@ Las estructuras nos permiten crear datos mas complejos con varias propiedades.
 
 ## Arrays
 Si queremos tener una colección de datos podemos usar arrays, en solidity hay dos tipos, los fijos y los dinámicos.
-```
+```solidity
 // Un Array con una longitud fija de 2 elementos:
 uint[2] fixedArray;
 // otro Array fijo, con longitud de 5 elementos:
