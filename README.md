@@ -201,3 +201,251 @@ YourContract.IntegersAdded(function(error, result) {
   // hacer algo con `result`
 }
 ```
+
+## Mapeos y direcciones
+La blockchain de Ethereum está creada por `cuentas`, que podrían ser como cuentas bancarias. Una cuenta tiene un balance de `Ether` y puedes recibir pagos en Ether de otras cuentas. Cada cuenta tiene una dirección que un identificador único que apuntado a una cuenta, y se asemejaría a algo así:
+```solidity
+0x0cE446255506E92DF41614C46F1d6df9Cc969183
+```
+
+### Mapeando
+Definir un mapping se asemejaría a esto:
+```solidity
+// Para una aplicación financial, guardamos un uint con el balance de su cuenta:
+mapping (address => uint) public accountBalance;
+// O podría usarse para guardar / ver los usuarios basados en ese userId
+mapping (uint => string) userIdToName;
+```
+Un mapeo es esencialmente una asociación valor-clave para guardar y ver datos. En el primer ejemplo, la llave es un address (dirección) y el valor correspondería a un uint, y en el segundo ejemplo la llave es un uint y el valor un string.
+
+## msg.sender
+En Solidity, hay una serie de variables globales que están disponibles para todas las funciones. Una de estas es msg.sender, que hace referencia a la dirección de la persona (o el contrato inteligente) que ha llamado a esa función.
+> En Solidity, la ejecución de una función necesita empezar con una llamada exterior. Un contrato se sentará en la blockchain sin hacer nada esperando a que alguien llame a una de sus funciones. Así que siempre habrá un msg.sender.
+Aquí tenemos un ejemplo de como usar msg.sender y actualizar un mapping:
+```solidity
+mapping (address => uint) favoriteNumber;
+
+function setMyNumber(uint _myNumber) public {
+  // Actualiza tu mapeo `favoriteNumber` para guardar `_myNumber` dentro de `msg.sender`
+  favoriteNumber[msg.sender] = _myNumber;
+  // ^ La sintaxis para guardar datos en un mapeo es como en los arrays
+}
+
+function whatIsMyNumber() public view returns (uint) {
+  // Conseguimos el valor guardado en la dirección del emisor
+  // Será `0` si el emisor no ha llamado a `setMyNumber` todavía
+  return favoriteNumber[msg.sender];
+}
+``` 
+En este trivial ejemplo, cualquiera puede llamar a `setMyNumber` y guardar un `uint` en nuestro contrato, que estará atado a su dirección. Entonces, cuando llamen a `whatIsMyNumber`, debería devolverles el `uint` que han guardado.
+
+Usando `msg.sender` te da la seguridad de la blockchain de Ethereum — la única forma de que otra persona edite la información de esta sería robandole la clave privada asociada a la dirección Ethereum.
+
+## Requiere
+require hace que la función lanze un error y pare de ejecutarse si la condición no es verdadera:
+```solidity
+function sayHiToVitalik(string _name) public returns (string) {
+  // Compara si _name es igual a "Vitalik". Lanza un error si no lo son.
+  // (Nota: Solidity no tiene su propio comparador de strings, por lo que
+  // compararemos sus hashes keccak256 para ver si sus strings son iguales)
+  require(keccak256(_name) == keccak256("Vitalik"));
+  // Si es verdad, continuamos con la función:
+  return "Hi!";
+}
+```
+Si llamas a la función con `sayHiToVitalik("Vitalik")`, esta devolverá "Hi!". Si la llamas con cualquier otra entrada, lanzará un error y no se ejecutará.
+De este modo require es muy útil a la hora de verificar que ciertas condiciones sean verdaderas antes de ejecutar una función.
+
+## Herencia
+
+Nuestro código está haciendose un poco largo. Mejor que hacer un contrato extremandamente largo, a veces tiene sentido separar la lógica de nuestro código en multiples contratos para organizar el código.
+
+Una característica de Solidity que hace más manejable esto es la herencia de los contratos:
+```solidity
+contract Doge {
+  function catchphrase() public returns (string) {
+    return "So Wow CryptoDoge";
+  }
+}
+
+contract BabyDoge is Doge {
+  function anotherCatchphrase() public returns (string) {
+    return "Such Moon BabyDoge";
+  }
+}
+```
+BabyDoge hereda de Doge. Eso significa que si compilas y ejecutas BabyDoge, este tendrá acceso tanto a `catchphrase()` como a `anotherCatchphrase()` (y a cualquier otra función publica que definamos en Doge).
+
+## Importar
+Cuando tienes multiples archivos y quieres importar uno dentro de otro, Solidity usa la palabra clave import:
+```solidity
+import "./someothercontract.sol";
+
+contract newContract is SomeOtherContract {
+
+}
+```
+Entonces si tenemos un fichero llamado `someothercontract.sol` en el mismo directorio que este contrato (eso es lo que significa ./), será importado por el compilador.
+
+## Storage vs Memory
+
+En Solidity, hay dos sitios donde puedes guardar variables - en `storage` y en `memory`.
+
+`Storage` se refiere a las variables guardadas permanentemente en la blockchain. Las variables de tipo `memory` son temporales, y son borradas en lo que una función externa llama a tu contrato. Piensa que es como el disco duro vs la RAM de tu ordenador.
+La mayoría del tiempo no necesitas usar estas palabras clave ya que Solidity las controla por defecto. Las variables de estado (variables declaradas fuera de las funciones) son por defecto del tipo storage y son guardadas permanentemente en la blockchain, mientras que las variables declaradas dentro de las funciones son por defecto del tipo memory y desaparecerán una vez la llamada a la función haya terminado.
+
+Aun así, hay momentos en los que necesitas usar estas palabras clave, concretamente cuando estes trabajando con structs y arrays dentro de las funciones:
+```solidity
+contract SandwichFactory {
+  struct Sandwich {
+    string name;
+    string status;
+  }
+
+  Sandwich[] sandwiches;
+
+  function eatSandwich(uint _index) public {
+    // Sandwich mySandwich = sandwiches[_index];
+
+    // ^ Parece algo sencillo, pero solidity te dará un warning
+    // diciendo que deberías declararlo `storage` o `memory`.
+
+    // De modo que deberias declararlo como `storage`, así:
+    Sandwich storage mySandwich = sandwiches[_index];
+    // ...donde `mySandwich` es un apuntador a `sandwiches[_index]`
+    // de tipo storage, y...
+    mySandwich.status = "Eaten!";
+    // ...esto cambiará permanentemente `sandwiches[_index]` en la blockchain.
+
+    // Si únicamente quieres una copia, puedes usar `memory`:
+    Sandwich memory anotherSandwich = sandwiches[_index + 1];
+    // ...donde `anotherSandwich` seria una simple copia de 
+    // los datos en memoria, y...
+    anotherSandwich.status = "Eaten!";
+    // ...modificará la variable temporal y no tendrá efecto
+    // en `sandwiches[_index + 1]`. Pero puedes hacer lo siguiente:
+    sandwiches[_index + 1] = anotherSandwich;
+    // ...si quieres que la copia con los cambios se guarde en la blockchain.
+  }
+}
+```
+
+## Más en la Visibilidad de Funciones
+### Internal y External
+Además de public y private, Solidity tiene dos tipos de visibilidad más para las funciones: internal y external.
+
+internal es lo mismo que private, a excepción de que es también accesible desde otros contratos que hereden de este. (¡Ey, suena como lo que necesitamos aquí!).
+
+external es parecido a public, a excepción que estas funciones SOLO puedes ser llamadas desde fuera del contrato — no pueden ser llamadas por otras funciones dentro de ese contrato. Hablaremos más adelante sobre cuando querrás usar external vs public.
+
+Para declarar las funciones internal o external, la sintaxis es igual que private y public:
+```solidity
+contract Sandwich {
+  uint private sandwichesEaten = 0;
+
+  function eat() internal {
+    sandwichesEaten++;
+  }
+}
+
+contract BLT is Sandwich {
+  uint private baconSandwichesEaten = 0;
+
+  function eatWithBacon() public returns (string) {
+    baconSandwichesEaten++;
+    // Podemos llamar a esta función aquí porque es internal
+    eat();
+  }
+}
+```
+
+## Interactuando con otros contratos
+Para que nuestro contrato pueda hablar a otro contrato de la blockchain que no poseemos, necesitamos definir una `interfaz`.
+
+Vamos a ver un simple ejemplo. Digamos que hay un contrato en la blockchain tal que así:
+```solidity
+contract LuckyNumber {
+  mapping(address => uint) numbers;
+
+  function setNum(uint _num) public {
+    numbers[msg.sender] = _num;
+  }
+
+  function getNum(address _myAddress) public view returns (uint) {
+    return numbers[_myAddress];
+  }
+}
+```
+Este seria un simple contrato donde cualquiera puede guardar su número de la suerte, y este estará asociado a su dirección de Ethereum. De esta forma cualquiera podría ver el número de la suerte de una persona usando su dirección.
+
+Ahora digamos que tenemos un contrato externo que quiere leer la información de este contrato usando la función `getNum`.
+
+Primero debemos usar una interfaz del contrato `LuckyNumber`:
+```solidity
+contract NumberInterface {
+  function getNum(address _myAddress) public view returns (uint);
+}
+```
+Ten en cuenta que esto se asemeja a definir un contrato, con alguna diferencia. Primero, solo declaramos las funciones con las que queremos interactuar - en este caso getNum — y no mencionamos ninguna otra función o variables de estado.
+
+Segundo, no definimos el cuerpo de la función. En vez de usar las llaves ({ y }), solamente terminaremos la función añadiendo un punto y coma al final de la declaración (;).
+
+Sería como definir el esqueleto del contrato. Así es como conoce el compilador a las interfaces.
+
+Incluyendo esta interfaz en el código de tu dapp nuestro contrato sabe como son las funciones de otro contrato, como llamarlas, y que tipo de respuesta recibiremos.
+
+Continuando con nuestro ejemplo anterior de NumberInterface, una vez hemos definido la interfaz como:
+```solidity
+contract NumberInterface {
+  function getNum(address _myAddress) public view returns (uint);
+}
+```
+Podemos usarla en el contrato de esta manera:
+```solidity
+contract MyContract {
+  address NumberInterfaceAddress = 0xab38... 
+  // ^ La dirección del contrato FavoriteNumber en Ethereum
+  NumberInterface numberContract = NumberInterface(NumberInterfaceAddress)
+  // Ahora `numberContract` está apuntando al otro contrato
+
+  function someFunction() public {
+    // Ahora podemos llamar a `getNum` de ese contrato:
+    uint num = numberContract.getNum(msg.sender);
+    // ...y haz algo con `num` aquí
+  }
+}
+```
+De esta manera, tu contrato puede interactuar con otro contrato de la blockchain de Ethereum, siempre y cuando la función esté definida como public o external.
+
+## Manejando Múltiples Valores Devueltos
+```solidity
+function multipleReturns() internal returns(uint a, uint b, uint c) {
+  return (1, 2, 3);
+}
+
+function processMultipleReturns() external {
+  uint a;
+  uint b;
+  uint c;
+  // Así es como hacemos múltiples asignaciones:
+  (a, b, c) = multipleReturns();
+}
+
+// O si solo nos importa el último de estos valores:
+function getLastReturnValue() external {
+  uint c;
+  // Podemos dejar el resto de campos en blanco:
+  (,,c) = multipleReturns();
+}
+```
+## Sentencias if
+Una sentencia if en Solidity es igual que en javascript:
+```solidity
+function eatBLT(string sandwich) public {
+  // Recuerda que con strings, debemos comparar sus hashes keccak256 
+  // para comprobar su equidad
+  if (keccak256(sandwich) == keccak256("BLT")) {
+    eat();
+  }
+}
+```
