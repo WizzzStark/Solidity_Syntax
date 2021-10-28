@@ -449,3 +449,233 @@ function eatBLT(string sandwich) public {
   }
 }
 ```
+
+## Inmutabilidad de los contratos
+Para empezar, despues de implementar un contrato en Ethereum, es inmutable, lo que significa que nunca va a ser modificado o actualizado de nuevo.
+
+El código inicial que implementes en el contrato es el que va a permanecer, permanentemente, en la blockchain. Esto es debido a que una de las mayores preocupaciones de Solidity es la seguridad. Si hay un error en el código del contrato, no hay forma de solucionarlo más adelante. Tendrás que decirles a tus usuarios que empiecen a usar otra dirección de contrato inteligente que incluya ese arreglo.
+
+Pero es también una característica de los contratos inteligentes. El código es la ley. Si lees el código de un contrato inteligente y lo verificas, vas a estar totalmente seguro de que cada vez que lo llames va a hacer exactamente lo que el código dice que va a hacer. Nadie va a poder más adelante cambiar la función y que te devuelva resultados inesperados.
+
+## Dependencias externas 
+Si estamos llamando a otro contrato que no es nuestro y por alún motivo cambia su dirección, si hemos definido su dirección hardcodeada dejaría a nuestra DApp completamente inservible - nuestra DApp apuntará a una dirección hardcodeada que no devolverá valores nunca más y no podremos modificar nuestro contrato para solucionarlo.
+
+Por este motivo, a veces tiene sentido programar funciones que te permitan actualizar partes de nuestra DApp.
+
+## Contrato Ownable de OppenZeppelin
+Abajo está el contrato Ownable definido en la librería Solidity de OpenZeppelin. OpenZeppelin es una librería segura donde hay contratos inteligentes para utilizar en tus propias DApps revisados por la comunidad. En este caso es para asignarnos permisos especiales.
+```solidity
+/**
+ * @title Ownable
+ * @dev The Ownable contract has an owner address, and provides basic authorization control
+ * functions, this simplifies the implementation of "user permissions".
+ */
+contract Ownable {
+  address public owner;
+  event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+  /**
+   * @dev The Ownable constructor sets the original `owner` of the contract to the sender
+   * account.
+   */
+  function Ownable() public {
+    owner = msg.sender;
+  }
+
+  /**
+   * @dev Throws if called by any account other than the owner.
+   */
+  modifier onlyOwner() {
+    require(msg.sender == owner);
+    _;
+  }
+
+  /**
+   * @dev Allows the current owner to transfer control of the contract to a newOwner.
+   * @param newOwner The address to transfer ownership to.
+   */
+  function transferOwnership(address newOwner) public onlyOwner {
+    require(newOwner != address(0));
+    OwnershipTransferred(owner, newOwner);
+    owner = newOwner;
+  }
+}
+```
+Alguna de las cosas que no hemos visto todavía:
+ -  Constructores: `function Ownable()` es un `constructor`, que es una función especial opcional que tiene el mismo nombre que el contrato. Será ejecutada una única vez, cuando el  contrato sea creado por primera vez.
+ -  Modificadores de Funciones: `modifier onlyOwner()`. Los `modificadores` son como semifunciones que son usadas para modificar otras funciones, normalmente para comprobar algunos requisitos antes de la ejecución. En este caso, onlyOwner puede ser usada para limitar el acceso y que solo el dueño del contrato pueda ejecutar función. 
+ -  Palabra clave `indexed`, se explicará mas adelante.
+
+Basicamente `Ownable` hace lo siguiente:
+
+Cuando el contrato ha sido creado, su constructor inicializa `owner` con `msg.sender` (la persona que lo ha implementado)
+
+Añade el modificador `onlyOwner`, que puede restringir el acceso a solo el owner en una función.
+
+Permite transferir el contrato a un nuevo `owner`.
+
+`onlyOwner` es un requisito tan común que la mayoría de las DApps en Solidity suelen empezar con un copia/pega de este contrato Ownable, y después su primer contrato heredaría de él.
+
+## modificadores de función
+
+Un modificador de función es igual que una función, pero usa la palabra clave modifier en vez de function. Pero no puede ser llamado directamente como una función - en vez de eso, podemos añadirle el nombre del modificador al final de la definición de la función para cambiar el comportamiento de ella.
+
+Vamos a verlo con más detalle examinando onlyOwner:
+```solidity
+/**
+ * @dev Throws if called by any account other than the owner.
+ */
+modifier onlyOwner() {
+  require(msg.sender == owner);
+  _;
+}
+```
+Tendremos que usar el modificador de esta manera:
+```solidity
+contract MyContract is Ownable {
+  event LaughManiacally(string laughter);
+
+  // Mira como se usa `onlyOwner` debajo:
+  function likeABoss() external onlyOwner {
+    LaughManiacally("Muahahahaha");
+  }
+}
+```
+Observa el modificador `onlyOwner` en la función `likeABoss`. Cuando llamas a likeABoss, el código dentro de onlyOwner se ejecuta primero. Entonces cuando se encuentra con la sentencia _; en onlyOwner, vuelve y ejecuta el código dentro de likeABoss.
+
+Hay otras maneras de usar los `modificadores`, uno de los casos de uso más comunes es añadir una rápida comprobación require antes de que se ejecute la función.
+
+En el caso de onlyOwner, añadiendole este modificador a la función hace que solo el dueño del contrato (tú, si eres el que lo ha implementado) puede llamar a la función.
+> Nota: Darle poderes especiales de esta manera al dueño a lo largo del contrato es usualmente necesario, pero puede también ser usado malintencionadamente.Por ejemplo, el dueño puede añadir una función oculta que le permita hacer lo que quiera en cualquier momento. Así que es importante recordar que solo porque una DApp esté en Ethereum no significa automáticamente que sea descentralizada — tienes que leerte el código fuente completo para asegurarte que esté libre de poderes especiales controlados por su dueño que puedan ser potencialmente preocupantes. Hay un cuidadoso balance entre mantener el control sobre la DAPP para poder arreglar los bugs potenciales, y construir una plataforma sin dueño donde tus usuarios puedan confiar la seguridad de sus datos.
+
+## Gas — el combustible que mueven las DApps de Ethereum
+En Solidity, tus usuarios tienen que pagar cada vez que ejecuten una función en tu DApp usando una divisa llamada gas. Los usuarios compran gas con Ether (la divisa de Ethereum), así que deben gastar ETH para poder ejecutar funciones en tu DApp.
+
+La cantidad de gas necesaria para ejecutar una función depende en cuán compleja sea la lógica de la misma. Cada operación individual tiene un coste de gas basado aproximadamente en cuantos recursos computacionales se necesitarán para llevarla a cabo (p. ej. escribir en memoria es más caro que añadir dos integers). El total coste de gas de tu función es la suma del coste de cada una de sus operaciones.
+
+Como ejecutar funciones cuestan dinero real a los usuarios, la optimización de código es mucho más importante en Ethereum que en cualquier otro lenguaje. Si tu código es descuidado, tus usuarios van a tener que pagar un premium para ejecutar tus funciones - esto puede suponer millones de dolares gastados innecesariamente por miles de usuarios en tasas.
+
+### Porqué es necesario el gas?
+Ethereum es como un ordenador grande, lento, pero extremandamente seguro. Cuando ejecutas una función, cada uno de los nodos de la red necesita ejecutar esa misma función para comprobar su respuesta - miles de nodos verificando cada ejecución de funciones es lo que hace a Ethereum descentralizado, y que sus datos sean inmutables y resistentes a la censura.
+
+Los creadores de Ethereum querian estar seguros de que nadie pudiese obstruir la red con un loop infinito, o acaparar todos los recursos de la red con cálculos intensos. Por eso no hicieron las transacciones gratuitas, y los usuarios tienen que pagar por su poder de computo así como por su espacio en memoria.
+> Nota: Esto no es necesariamente verdadero en las sidechains, así como los autores de CryptoZombies están construyendo en Loom Network. Es probable que nunca se ejecute un juego como World of Warcraft directamente en la mainnet de Ethereum - el coste de gas sería excesivamente caro. Pero puede ejecutarse en una sidechain con un algoritmo de consenso diferente.
+
+## Empaquetado struct para ahorrar gas
+Normalmente no hay ningún beneficio en usar cualquiera de estos subtipos porque Solidity reserva 256 bits de almacenamiento independientemente del tamaño del uint. Por ejemplo, usando uint8 en vez de uint (uint256) no te ahorrará nada de gas.
+
+Pero hay una excepción para esto: dentro de los struct.
+
+Si tienes varios uints dentro de una estructura, usar un uint de tamaño reducido cuando sea posible permitirá a Solidity empaquetar estas variables para que ocupen menos espacio en memoria. Por ejemplo:
+```solidity
+struct NormalStruct {
+  uint a;
+  uint b;
+  uint c;
+}
+
+struct MiniMe {
+  uint32 a;
+  uint32 b;
+  uint c;
+}
+
+// `mini` costará menos gas que `normal` debido al empaquetado de la estructura
+NormalStruct normal = NormalStruct(10, 20, 30);
+MiniMe mini = MiniMe(10, 20, 30); 
+```
+Por esta razón, dentro de una estructura querrás usar los subtipos más pequeños que vayas a necesitar.
+
+Querrás también agrupar los tipos de datos que sean iguales (es decir, ponerlos al lado en la estructura) así Solidity podrá minimizar el espacio requerido. Por ejemplo, una estructura con campos uint c; uint32 a; uint32 b; costará menos gas que una estructura con campos uint32 a; uint c; uint32 b; porque los campos uint32 están agrupados al lado.
+
+## Unidades de Tiempo
+Solidity proporciona algunas unidades nativas para trabajar con el tiempo.
+
+La variable now devolverá el actual tiempo unix (la cantidad de segundos que han pasado desde el 1 de Enero de 1970). El tiempo unix cuando escribía esto es 1635406629.
+> Nota: El tiempo unix es tradicionalmente guardado en un número de 32 bits. Esto nos llevará a el problema del "Año 2038", donde las variables timestamp de tipo unix desbordarán y dejará inservibles muchos sistemas antiguos. Así que si queremos que nuestra DApp siga funcionando después de 20 años, podemos usar un número de 64 bits - pero de mientras nuestros usuarios tendrán que gastar más gas para usar nuestra DApp. ¡Decisiones de diseño!
+Solidity también contiene segundos, minutos, horas, días, semanas y años como unidades de tiempo. Estos convertirán a un uint la cantidad de segundos que contengan esos números. Es decir 1 minuto son 60, 1 hora son 3600 (60 segundos x 60 minutos), 1 día son 86400 (24 horas x 60 minutos x 60 segundos), etc.
+
+Aquí un ejemplo de como estas unidades pueden ser útiles:
+```solidity
+uint lastUpdated;
+
+// Ajustamos `lastUpdated` a `now`
+function updateTimestamp() public {
+  lastUpdated = now;
+}
+
+// Devolverá `true` si han pasado 5 minutos desde que `updateTimestamp`
+// fue llamado, `false` si no han pasdo 5 minutos todavía
+function fiveMinutesHavePassed() public view returns (bool) {
+  return (now >= (lastUpdated + 5 minutes));
+}
+```
+
+## Pasando estructuras como argumentos
+Puedes pasar un puntero storage a una estructura como argumento a una función private o internal. 
+La sintaxis sería asi:
+```solidity
+function _doStuff(Zombie storage _zombie) internal {
+  // hacer cosas con _zombie
+}
+```
+De esta manera podemos pasar una referencia a nuestro zombi en una función en vez de pasar la ID del zombi y comprobar cual es.
+
+## Modificadores de función con argumentos
+También podemos pasarle argumentos a los modificadores:
+```solidity
+// Un mapeo para guardar la edad de un usuario:
+mapping (uint => uint) public age;
+
+// Modificador que requiere que ese usuario sea mayor a cierta edad:
+modifier olderThan(uint _age, uint _userId) {
+  require (age[_userId] >= _age);
+  _;
+}
+
+// Tiene que ser mayor a 16 años para conducir un coche (en EEUU, al menos).
+// Podemos llamar al modificador de función `olderThan` pasandole argumentos de esta manera:
+function driveCar(uint _userId) public olderThan(16, _userId) {
+  // La lógica de la función
+}
+```
+Puedes ver aquí como el modificador olderThan recibe los argumentos de la misma manera que las funciones. Y cómo la función driveCar le pasa sus argumentos al modificador.
+
+## Funciones View y el gas
+Las funciones view no cuestan gas cuando son llamadas externamente por un usuario.
+
+Esto es debido a que las funciones view no cambia nada en la blockchain - solo leen datos. Así que marcar una función con view le dice a web3.js que solo necesita consultar a tu nodo local de Ethereum para ejecutar la función, y que no necesita crear ninguna transacción en la blockchain (la cual debería ejecutarse por todos y cada uno de los nodos, y costaría gas).
+
+Hablaremos sobre configurar web3.js en tu propio nodo mas tarde. Por ahora la mayor ventaja es que puedes optimizar el uso de gas de tu DApp haciendo que tus usuarios utilicen funciones external view siempre que sea posible.
+> Nota: Si una función view es llamada internamente por otra función que no sea view en el mismo contrato, esta seguira costando gas. Esto es porque la otra función crea una transacción en Ethereum, y necesita ser verificada por el resto de nodos. Por lo que las funciones view son gratuitas siempre que sean llamadas externamente.
+
+## Storage es caro
+Una de las operaciones más caras en Solidity es usar storage — especialmente la escritura.
+
+Esto es debido a que cada vez que escribes o cambias algún dato, este se guarda permanentemente en la blockchain. ¡Para siempre! Miles de nodos alrededor del mundo necesitan guardar esos datos en sus discos duros, y esa cantidad de datos sigue creciendo a lo largo del tiempo a medida que crece la blockchain. Así que tiene que haber un coste para hacer eso.
+
+Para seguir manteniendo los costes bajos, querrás evitar escribir datos en "storage" a no ser que sea absolutemente necesario. A veces esto implica usar en programación una lógica ineficiente - como volver a construir un array en memoria cada vez que una función es llamada en vez de simplemente guardar ese array en una variable para acceder a sus datos más rápido.
+
+En la mayoría de lenguajes de programación, usar bucles sobre largos conjuntos de datos es costoso. Pero en Solidity, esta es una manera más barata que usar storage si está en una función external view, debido a que las funciones view no les cuesta a los usuarios nada de gas. (¡Y el gas le cuesta a tus usuarios dinero real!).
+
+Veremos los bucles for en el siguiente capítulo, pero primero, vamos a ver como declarar los arrays en memoria.
+
+## Declarado arays en memoria
+Puedes usar la palabra clave memory con arrays para crear un nuevo arrays dentro de una función sin necesidad de escribir nada en storage. El array solo existirá hasta el final de la llamada de la función, y esto es más barato en cuanto a gas que actualizar un array en storage - gratis si está dentro de una función view llamada externamente.
+
+Así es como se declara un array en memoria:
+```solidity
+function getArray() external pure returns(uint[]) {
+  // Instanciamos un nuevo array en memoria con una longitud de 3
+  uint[] memory values = new uint[](3);
+  // Le añadimos algunos valores
+  values.push(1);
+  values.push(2);
+  values.push(3);
+  // Devolvemos el arrays
+  return values;
+}
+```
+Esto es un ejemplo trivial para enseñarte a cómo usar la sintaxis, pero en el próximo apartado veremos como combinarlo con bucles `for` para usarlo en casos de uso reales.
+> Nota: los arrays de tipo `memory` deben ser creados con una longitud como argumento (en este ejemplo, 3). Actualmente no pueden ser redimensionados como los arrays `storage` pueden serlo usando `array.push()`, de todas maneras esto podría cambiar en futuras versiones de Solidity.
+
