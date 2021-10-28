@@ -712,7 +712,7 @@ Pero en Ethereum, ya que tanto el dinero (Ether), los datos (payload de transacc
 
 Esto abarca una lógica realmente interesante, como requerir cierto pago por el contrato para, de esta manera, ejecutar una función.
 Un ejempllo:
-```soldity
+```solidity
 contract OnlineStore {
   function buySomething() external payable {
     // Check to make sure 0.001 ether was sent to the function call:
