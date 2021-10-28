@@ -649,7 +649,7 @@ Esto es debido a que las funciones view no cambia nada en la blockchain - solo l
 Hablaremos sobre configurar web3.js en tu propio nodo mas tarde. Por ahora la mayor ventaja es que puedes optimizar el uso de gas de tu DApp haciendo que tus usuarios utilicen funciones external view siempre que sea posible.
 > Nota: Si una función view es llamada internamente por otra función que no sea view en el mismo contrato, esta seguira costando gas. Esto es porque la otra función crea una transacción en Ethereum, y necesita ser verificada por el resto de nodos. Por lo que las funciones view son gratuitas siempre que sean llamadas externamente.
 
-## Storage es caro
+### Storage es caro
 Una de las operaciones más caras en Solidity es usar storage — especialmente la escritura.
 
 Esto es debido a que cada vez que escribes o cambias algún dato, este se guarda permanentemente en la blockchain. ¡Para siempre! Miles de nodos alrededor del mundo necesitan guardar esos datos en sus discos duros, y esa cantidad de datos sigue creciendo a lo largo del tiempo a medida que crece la blockchain. Así que tiene que haber un coste para hacer eso.
@@ -660,7 +660,7 @@ En la mayoría de lenguajes de programación, usar bucles sobre largos conjuntos
 
 Veremos los bucles for en el siguiente capítulo, pero primero, vamos a ver como declarar los arrays en memoria.
 
-## Declarado arays en memoria
+### Declarado arays en memoria
 Puedes usar la palabra clave memory con arrays para crear un nuevo arrays dentro de una función sin necesidad de escribir nada en storage. El array solo existirá hasta el final de la llamada de la función, y esto es más barato en cuanto a gas que actualizar un array en storage - gratis si está dentro de una función view llamada externamente.
 
 Así es como se declara un array en memoria:
@@ -679,3 +679,115 @@ function getArray() external pure returns(uint[]) {
 Esto es un ejemplo trivial para enseñarte a cómo usar la sintaxis, pero en el próximo apartado veremos como combinarlo con bucles `for` para usarlo en casos de uso reales.
 > Nota: los arrays de tipo `memory` deben ser creados con una longitud como argumento (en este ejemplo, 3). Actualmente no pueden ser redimensionados como los arrays `storage` pueden serlo usando `array.push()`, de todas maneras esto podría cambiar en futuras versiones de Solidity.
 
+## Bucles for
+La sintaxis de los bucles for en Solidity es similar a JavaScript.
+
+Vamos a ver un ejemplo donde queremos hacer un array de números pares:
+```solidity
+function getEvens() pure external returns(uint[]) {
+  uint[] memory evens = new uint[](5);
+  // Guardamos el índice del nuevo array:
+  uint counter = 0;
+  // Iteramos del 1 al 10 con un bucle for:
+  for (uint i = 1; i <= 10; i++) {
+    // Si `i` es par...
+    if (i % 2 == 0) {
+      // Añadelo a nuestro array
+      evens[counter] = i;
+      // Incrementamos el contador al nuevo índice vacío de `evens`:
+      counter++;
+    }
+  }
+  return evens;
+}
+```
+La función devolverá un array con este contenido [2, 4, 6, 8, 10].
+
+## Payable
+Las funciones payable son parte de lo que hace de Solidity y Ethereum algo tan genial — son un tipo de función especial que pueden recibir Ether.
+
+Pienselo por un momento. Cuando llama una función API en un servidor web normal, no puede enviar dólares (USD$) junto con su llamada de función — ni enviar Bitcoin.
+
+Pero en Ethereum, ya que tanto el dinero (Ether), los datos (payload de transacción) y el mismo código de contrato viven en Ethereum, es posible para usted llamar a una función y pagar dinero por el contrato al mismo tiempo.
+
+Esto abarca una lógica realmente interesante, como requerir cierto pago por el contrato para, de esta manera, ejecutar una función.
+Un ejempllo:
+```soldity
+contract OnlineStore {
+  function buySomething() external payable {
+    // Check to make sure 0.001 ether was sent to the function call:
+    require(msg.value == 0.001 ether);
+    // If so, some logic to transfer the digital item to the caller of the function:
+    transferThing(msg.sender);
+  }
+}
+```
+Aquí, msg.value es una manera de ver cuanto Ether fue enviado al contrato, y ether es una unidad incorporada.
+
+Lo que sucede aquí es que alguien llamaría a la función desde web3.js (desde la interfaz JavaScript del DApp) de esta manera:
+```
+// Assuming `OnlineStore` points to your contract on Ethereum:
+OnlineStore.buySomething({from: web3.eth.defaultAccount, value: web3.utils.toWei(0.001)})
+```
+Nótese el campo value, donde la llamada de función javascript especifíca cuánto de ether enviar (0.001). Si piensas en la transacción como un sobre, y los parámetros que usted envía a la llamada de función son los contenidos de la carta que coloca adentro, entonces añadir un value es como poner dinero en efectivo dentro del sobre — la carta y el dinero son entregados juntos al receptor.
+> Nota: Si una función no es marcada como payable y usted intenta enviar Ether a esta, como se hizo anteriormente, la función rechazará su transacción.
+
+## Retiros
+En el apartado anterior, aprendimos cómo enviar Ether a un contrato. Entonces ¿Qué ocurre cuando lo envía?
+
+Luego de enviar Ether a un contrato, este se almacena en la cuenta de Ethereum del contrato y estará atrapado ahí — a menos que añada una función para retirar el Ether del contrato
+
+Puede escribir una función para retirar Ether del contrato de la siguiente forma:
+```solidity
+contract GetPaid is Ownable {
+  function withdraw() external onlyOwner {
+    owner.transfer(this.balance);
+  }
+}
+```
+Nótese que estamos utilizando owner y onlyOwner del contrato Ownable, asumiendo que este fue importado.
+
+Puede transferir Ether a una dirección utilizando la función transfer y this.balance devolverá el balance total almacenado en el contrato. Así que si 100 usuarios han pagado 1 Ether a nuestro contrato, this.balance sería igual a 100 Ether.
+
+Puede utilizar transfer para enviar fondos a cualquier dirección de Ethereum. Por ejemplo, podría tener una función que transfiera Ether de vuelta al msg.sender si rebasan el precio al pagar un item.
+```solidity
+uint itemFee = 0.001 ether;
+msg.sender.transfer(msg.value - itemFee);
+```
+O en un contrato con un comprador y un vendedor, usted podría guardar la dirección del vendedor en la memoria, luego, cuando alguien adquiera su item, transferirle la tasa pagada por el comprador: 
+`seller.transfer(msg.value)`.
+
+Estos son algunos ejemplos de lo que hace de la programación de Ethereum algo realmente genial — puede tener mercados descentralizados como este que no son controlados por nadie.
+
+## Números aleatorios
+La mejor fuente de aleatoriedad que tenemos en solidity es la función hash `keccak256`.
+
+Podríamos hacer algo como lo siguiente para generar un número aleatorio:
+```solidity
+// Generate a random number between 1 and 100:
+uint randNonce = 0;
+uint random = uint(keccak256(now, msg.sender, randNonce)) % 100;
+randNonce++;
+uint random2 = uint(keccak256(now, msg.sender, randNonce)) % 100;
+```
+Lo que esto haría es tomar la marca de tiempo de now, el msg.sender, y un nonce (un número que sólo se utiliza una vez, para que no ejecutemos dos veces la misma función hash con los mismos parámetros de entrada) en incremento.
+
+Luego entonces utilizaría keccak para convertir estas entradas a un hash aleatorio, convertir ese hash a un uint y luego utilizar % 100 para tomar los últimos 2 dígitos solamente, dándonos un número totalmente aleatorio entre 0 y 99.
+
+### Este método es vulnerable a ataques de nodos deshonestos
+En Ethereum, cuando llama a una función en un contrato, lo transmite a un nodo o nodos en la red como una transacción. Los nodos en la red luego recolectan un montón de transacciones, intentan ser el primero en resolver el problema de matemática intensamente informático como una "Prueba de Trabajo", para luego publicar ese grupo de transacciones junto con sus Pruebas de Trabajo (PoW) como un bloque para el resto de la red.
+
+Una vez que un nodo ha resuelto la PoW, los otros nodos dejan de intentar resolver la PoW, verifican que las transacciones en la lista de transacciones del otro nodo son válidas, luego aceptan el bloque y pasan a tratar de resolver el próximo bloque.
+
+Esto hace que nuestra función de números aleatorios sea explotable .
+
+Digamos que teníamos un contrato coin flip — cara y duplica su dinero, sello y pierde todo. Digamos que utilizó la función aleatoria anterior para determinar cara o sello. (random >= 50 es cara, random < 50 es sello).
+
+Si yo estuviera ejecutando un nodo, podría publicar una transacción a mi propio nodo solamente y no compartirla. Luego podría ejecutar la función coin flip para ver si gané — y si perdí, escojo no incluir esa transacción en el próximo bloque que estoy resolviendo. Podría seguir haciendo esto indefinidamente hasta que finalmente gané el lanzamiento de la moneda y resolví el siguiente bloque, beneficiandome de ello.
+
+### Como mejorar la seguridad
+Ya que todos los contenidos de la blockchain son visibles para todos los participantes, este es un problema dificil, y su solución está más allá del rango de este tutorial. Puede leer [este hilo de StackOverflow](https://ethereum.stackexchange.com/questions/191/how-can-i-securely-generate-a-random-number-in-my-smart-contract) para que se haga un idea. Una idea sería utilizar un oráculo para ingresar una función de número aleatorio desde fuera de la blockchain de Ethereum.
+
+Por supuesto, debido a que cientos de miles de nodos de Ethereum en la red están compitiendo por resolver el próximo bloque, mis probabilidades de resolver el siguiente bloque son extremadamente escasas. Me tomaría mucho tiempo o recursos informáticos para explotar esto y que sea beneficioso — pero si la recompensa fuera lo suficientemente alta (como si pudiera apostar $100,000,000 en la función coin flip), para mi valdría la pena atacar.
+
+Así que mientras esta generación de número aleatorio NO sea segura en Ethereum, en la práctica a menos que nuestra función aleatoria tenga mucho dinero en riesgo, es probable que los usuarios de su juego no tengan suficientes recursos para atacarla.
