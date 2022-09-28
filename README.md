@@ -1,7 +1,7 @@
 # Apuntes Solidity
 Apuntes de Solidity, lenguaje de programación orientado a contratos y enfocado específicamente a la Máquina Virtual de Ethereum. Estos apuntes están hechos a partir de la [página web](https://cryptozombies.io/) de cryptozombies, donde se puede poner en práctica todo esto.
 
-## Contatos
+## Contratos
 El código en solidity se estructura en contratos, que son los bloques más básicos de las aplicaciones en Ethereum, tanto las variables como las funciones pertenecen a contratos, un contrato vacío se vería así:
 ```solidity
 contract HolaMundo {
